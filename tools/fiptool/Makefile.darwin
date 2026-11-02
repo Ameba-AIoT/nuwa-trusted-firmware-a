@@ -1,0 +1,56 @@
+#
+# macOS build of fiptool.
+#
+# The fiptool and *.o files tracked in this directory are Linux ELF files, so
+# on macOS the top-level Makefile uses prebuilt/darwin-<arch>/fiptool instead.
+# That binary links libcrypto statically and depends only on libSystem, so
+# OpenSSL does not have to be installed to use it.
+#
+# The prebuilt binary is used as-is when it exists (there are no timestamp
+# dependencies on the sources). It is built from source only when it is
+# missing, which needs a Homebrew OpenSSL with libcrypto.a.
+#
+# To regenerate the prebuilt binary:
+#   make -C tools/fiptool -f Makefile.darwin rebuild
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+
+HOSTCC ?= cc
+V ?= 0
+ifeq (${V},0)
+  Q := @
+else
+  Q :=
+endif
+
+ARCH := $(shell uname -m)
+PREBUILT_DIR := prebuilt/darwin-${ARCH}
+PROJECT := ${PREBUILT_DIR}/fiptool
+
+OPENSSL_PREFIX ?= $(firstword $(wildcard /opt/homebrew/opt/openssl /usr/local/opt/openssl))
+
+override CPPFLAGS += -D_GNU_SOURCE -D_XOPEN_SOURCE=700
+HOSTCCFLAGS := -Wall -Werror -pedantic -std=c99 -O2 -mmacosx-version-min=11.0
+INCLUDE_PATHS := -I../../include/tools_share -I${OPENSSL_PREFIX}/include
+SOURCES := fiptool.c tbbr_config.c
+
+.PHONY: all rebuild
+
+all: ${PROJECT}
+
+# No prerequisites on purpose: an existing prebuilt binary is never rebuilt.
+${PROJECT}:
+	@test -f ${OPENSSL_PREFIX}/lib/libcrypto.a || { \
+		echo "$@ is missing and OpenSSL libcrypto.a was not found (set OPENSSL_PREFIX)."; \
+		exit 1; }
+	@echo "  HOSTCC  $@"
+	${Q}mkdir -p ${PREBUILT_DIR}
+	${Q}${HOSTCC} ${CPPFLAGS} ${HOSTCCFLAGS} ${INCLUDE_PATHS} ${SOURCES} \
+		${OPENSSL_PREFIX}/lib/libcrypto.a -o $@ 2>&1 | grep -v "was built for newer" || true
+	@test -x $@
+	@echo "Built $@ successfully"
+
+rebuild:
+	${Q}rm -f ${PROJECT}
+	${Q}${MAKE} -f Makefile.darwin all

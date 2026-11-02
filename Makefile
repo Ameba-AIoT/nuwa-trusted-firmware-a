@@ -921,6 +921,13 @@ ENCTOOL			?=	${ENCTOOLPATH}/encrypt_fw${BIN_EXT}
 
 # Variables for use with Firmware Image Package
 FIPTOOLPATH		?=	tools/fiptool
+# macOS uses binary under ${FIPTOOLPATH}/prebuilt/
+ifneq ($(OS),Windows_NT)
+ifeq ($(shell uname -s),Darwin)
+FIPTOOL_DARWIN		:=	1
+FIPTOOL			?=	${FIPTOOLPATH}/prebuilt/darwin-$(shell uname -m)/fiptool
+endif
+endif
 FIPTOOL			?=	${FIPTOOLPATH}/fiptool${BIN_EXT}
 FIPTOOL 		:= 	$(call fixpath, ${FIPTOOL})
 
@@ -1390,7 +1397,11 @@ fwu_fip: ${BUILD_PLAT}/${FWU_FIP_NAME}
 .PHONY: ${FIPTOOL}
 ${FIPTOOL}:
 ifneq ($(OS),Windows_NT)
+ifdef FIPTOOL_DARWIN
+	${Q}${MAKE} CPPFLAGS="-DVERSION='\"${VERSION_STRING}\"'" --no-print-directory -C ${FIPTOOLPATH} -f Makefile.darwin
+else
 	${Q}${MAKE} CPPFLAGS="-DVERSION='\"${VERSION_STRING}\"'" --no-print-directory -C ${FIPTOOLPATH}
+endif
 endif
 
 sptool: ${SPTOOL}
